@@ -1,7 +1,0 @@
-streamlit
-pyngrok
-pandas
-scikit-learn
-plotly
-requests
-

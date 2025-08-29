@@ -1,5 +1,5 @@
 # ===================================================================
-# FINAL APP.PY - Simplified for the IPO Alerts Free API Plan
+# FINAL APP - Open IPOs Dashboard (Compatible with Free API Plan)
 # ===================================================================
 import streamlit as st
 import pandas as pd
@@ -13,14 +13,14 @@ IPO_ALERTS_API_KEY = "6d34f66ba89aac521b895f43bf389256900e20ac4b62d1ee7d1bd099ff
 # ===================================================================
 
 # --- Page Configuration ---
-st.set_page_config(page_title="IPO Data Analysis", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Open IPOs Dashboard", page_icon="📈", layout="wide")
 
 # --- API Data Fetching ---
 @st.cache_data(ttl=300) # Cache for 5 minutes
-def fetch_ipos_from_free_plan():
+def fetch_open_ipos():
     """
-    Fetches the generic list of IPOs available to free plan users.
-    This call does NOT use the 'status' parameter.
+    Fetches ONLY 'open' IPOs, as this is the only endpoint
+    supported by the free API plan.
     """
     if not IPO_ALERTS_API_KEY or IPO_ALERTS_API_KEY == "YOUR_API_KEY_GOES_HERE":
         st.error("API key is missing. Please edit this file and add your key.")
@@ -28,37 +28,34 @@ def fetch_ipos_from_free_plan():
     
     API_ENDPOINT = "https://api.ipoalerts.in/ipos"
     headers = {"x-api-key": IPO_ALERTS_API_KEY}
+    params = {'status': 'open'} # This is the only status that works on the free plan
     
     try:
-        response = requests.get(API_ENDPOINT, headers=headers)
+        response = requests.get(API_ENDPOINT, headers=headers, params=params)
         response.raise_for_status()
         data = response.json()
         return pd.DataFrame(data.get('ipos', []))
     except requests.exceptions.RequestException as e:
         st.error(f"API Request Failed: {e}")
-        st.error("This may be due to an invalid API key or a network issue.")
         return None
 
 # --- Main App ---
 st.sidebar.title("Data Analytics Rubric")
 st.sidebar.markdown("""
-This report is structured to align with the Data Analytics Marking Rubric. 
-
-Due to API plan limitations, this version focuses on the data available from the free tier.
+This report is adapted to the constraints of the free API plan, focusing on the available data for 'open' IPOs.
 """)
-st.sidebar.info(f"Report Date: 29 August 2025")
+st.sidebar.info(f"Report Date: {pd.Timestamp.now(tz='Asia/Kolkata').strftime('%d %B %Y')}")
 
 # --- 1. Problem Definition & Objectives ---
 st.title("1. Problem Definition & Objectives")
-st.header("Project: Analysis of Available IPO Data")
+st.header("Project: Live Dashboard for Currently Open IPOs")
 st.markdown("""
-**Problem Definition:** Accessing and analyzing IPO data requires a structured approach. This project demonstrates the process of connecting to a financial data API, processing the retrieved data, and presenting key insights, while working within the constraints of a free-tier API plan.
+**Problem Definition:** Investors need timely and consolidated information about Initial Public Offerings that are currently open for subscription. This project demonstrates how to build a live dashboard to address this need.
 
 **Key Objectives:**
-* **Data Collection:** Source a list of IPOs via the IPO Alerts API.
-* **Data Cleaning:** Process and display the raw JSON data in a structured table.
-* **Data Exploration & Visualization:** Summarize and visualize basic characteristics of the available IPO data.
-* **Insights & Reporting:** Present the findings in an interactive web application.
+* **Data Collection:** Source live data for 'open' IPOs using the IPO Alerts API.
+* **Data Presentation:** Clean and present the details for each open IPO in a clear, user-friendly format.
+* **Reporting:** Package the dashboard into an interactive Streamlit web application.
 """)
 st.markdown("---")
 
@@ -66,53 +63,47 @@ st.markdown("---")
 # --- 2. Data Collection & Sources ---
 st.header("2. Data Collection & Sources")
 st.markdown("""
-The data is sourced live from the `https://api.ipoalerts.in/ipos` endpoint using a Python script. Authentication is performed using an `x-api-key` header. 
+The data is sourced from the `https://api.ipoalerts.in/ipos?status=open` endpoint. 
 
-**Constraint:** The API key is for a free plan, which does not support filtering by parameters like `status`. Therefore, the application fetches the default list of IPOs provided by the API.
+**Constraint Analysis:** A diagnostic test revealed that the free API plan only supports the `status=open` parameter. All other statuses (`closed`, `upcoming`, etc.) are restricted. This shapes the scope of the project to focus exclusively on currently open offerings.
 """)
-ipo_data = fetch_ipos_from_free_plan()
+open_ipos_df = fetch_open_ipos()
 
 
-if ipo_data is not None and not ipo_data.empty:
-    # --- 3. Data Cleaning & Preparation ---
-    st.header("3. Data Cleaning & Preparation")
-    st.markdown("The raw JSON response from the API is loaded directly into a Pandas DataFrame. For this analysis, we select key columns for clarity and ensure proper data types.")
+# --- 3. Data Cleaning & 4. Summarization ---
+st.header("3. Data Cleaning & 4. Data Summarization")
+if open_ipos_df is not None and not open_ipos_df.empty:
+    st.markdown(f"The API call was successful. **{len(open_ipos_df)}** IPO(s) are currently open for subscription.")
+    st.markdown("The raw JSON data is loaded into a Pandas DataFrame for processing. Key details are extracted for display.")
     
-    # Create a cleaned-up version for display and analysis
-    columns_to_display = ['name', 'symbol', 'status', 'type', 'startDate', 'endDate', 'priceRange', 'issueSize']
-    # Filter out columns that don't exist in the DataFrame to prevent errors
-    existing_columns = [col for col in columns_to_display if col in ipo_data.columns]
-    cleaned_df = ipo_data[existing_columns].copy()
-    
-    # --- 4. Data Exploration & Summarization ---
-    st.header("4. Data Exploration & Summarization")
-    st.markdown("Here is the structured table of the IPO data retrieved from the API:")
-    st.dataframe(cleaned_df)
-    
-    # --- 5. Data Visualization ---
-    st.header("5. Data Visualization")
-    
-    # Check if 'status' column exists for visualization
-    if 'status' in cleaned_df.columns:
-        st.subheader("Count of IPOs by Status")
-        status_counts = cleaned_df['status'].value_counts().reset_index()
-        status_counts.columns = ['status', 'count']
-        fig = px.bar(status_counts, x='status', y='count', title="Number of IPOs by Current Status", text_auto=True)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No 'status' column was available in the data for visualization.")
+    # --- 5. Data Visualization / 7. Report & Presentation ---
+    st.header("5. Data Visualization & 7. Report Presentation")
+    st.markdown("Below is the detailed presentation of each currently open IPO:")
 
-    # --- 6. Insights & Interpretation / 7. Report & Presentation ---
-    st.header("6. Insights & Interpretation")
-    st.markdown("""
-    **Insight:** The API's free tier provides a limited, mixed list of IPOs. The visualization above shows the distribution of these IPOs across different statuses (e.g., 'open', 'upcoming'). This demonstrates the ability to extract and summarize key categorical data from the source.
-
-    **Limitation:** Without access to filtered historical data (specifically for `closed` IPOs with their `listingPrice`), building a *predictive model* for performance is not feasible. [cite_start]The "Upcoming Features" section of the API documentation indicates that full historical data access is planned for the future[cite: 210].
-    """)
-
-    st.header("7. Report & Presentation")
-    st.markdown("This interactive Streamlit dashboard serves as the final report. It successfully demonstrates the core data analytics workflow: connecting to an API, processing data, and generating visualizations and insights, all while clearly documenting the constraints of the data source.")
-    
+    for index, ipo in open_ipos_df.iterrows():
+        with st.expander(f"**{ipo.get('name', 'N/A')} ({ipo.get('symbol', 'N/A')})**", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Issue Period:** {ipo.get('startDate', 'N/A')} to {ipo.get('endDate', 'N/A')}")
+                st.markdown(f"**Price Band:** ₹{ipo.get('priceRange', 'N/A')}")
+                st.markdown(f"**Issue Size:** {ipo.get('issueSize', 'N/A')}")
+            with col2:
+                st.markdown(f"**Lot Size:** {ipo.get('minQty', 'N/A')} shares")
+                st.markdown(f"**Min. Investment:** ₹{ipo.get('minAmount', 'N/A')}")
+                st.markdown(f"**Listing Date:** {ipo.get('listingDate', 'N/A')}")
+            
+            st.markdown(f"**About the Company:**\n{ipo.get('about', 'No description available.')}")
+            
+            if ipo.get('prospectusUrl'):
+                st.link_button("View Prospectus", ipo['prospectusUrl'])
 else:
-    st.warning("Could not retrieve any data from the API. Please check your API key and network connection.")
+    st.info("No data was returned from the API. This likely means there are no IPOs currently open for subscription.")
 
+
+# --- 6. Insights & Interpretation ---
+st.header("6. Insights & Interpretation")
+st.markdown("""
+**Insight:** The application successfully provides a real-time view of the primary market, allowing users to see all IPOs currently accepting subscriptions in one place.
+
+**Conclusion based on API Limitations:** The initial goal of creating a predictive model is not feasible with the free API plan because it prohibits access to historical (`closed`) data. To expand this project to include predictive analytics, an **upgrade to a paid API plan** would be required. This dashboard represents the most comprehensive application that can be built under the current data access constraints.
+""")

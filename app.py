@@ -9,7 +9,7 @@ import requests
 # ===================================================================
 # 🔽🔽🔽 PASTE YOUR VALID IPO ALERTS API KEY HERE 🔽🔽🔽
 # ===================================================================
-IPO_ALERTS_API_KEY = "40de9583c60112ccc067cc09094b7593569e2f02d8b43af714a3f612e2ff9bae"
+IPO_ALERTS_API_KEY = "6d34f66ba89aac521b895f43bf389256900e20ac4b62d1ee7d1bd099ff07164e"
 # ===================================================================
 
 # --- Page Configuration ---
@@ -115,3 +115,4 @@ if ipo_data is not None and not ipo_data.empty:
     
 else:
     st.warning("Could not retrieve any data from the API. Please check your API key and network connection.")
+

@@ -1,6 +1,6 @@
 # ===================================================================
 # IPO Analytics & Tracker - Local Version
-# Organized according to the Data Analytics Marking Rubric
+# API Key is set directly in this file.
 # ===================================================================
 import streamlit as st
 import pandas as pd
@@ -12,6 +12,15 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import OneHotEncoder
 
+# ===================================================================
+# 🔽🔽🔽 STEP 1: PASTE YOUR API KEY INSIDE THE QUOTES BELOW 🔽🔽🔽
+# ===================================================================
+IPO_ALERTS_API_KEY = "40de9583c60112ccc067cc09094b7593569e2f02d8b43af714a3f612e2ff9bae"
+# ===================================================================
+# 🔼🔼🔼 STEP 1: PASTE YOUR API KEY INSIDE THE QUOTES ABOVE 🔼🔼🔼
+# ===================================================================
+
+
 # --- Page Configuration ---
 st.set_page_config(page_title="IPO Analytics & Tracker", page_icon="📈", layout="wide")
 
@@ -22,21 +31,18 @@ def parse_issue_size(size_str):
     try: return float(size_str)
     except (ValueError, TypeError): return None
 
-# --- API Data Fetching (Using Streamlit Secrets) ---
+# --- API Data Fetching ---
 @st.cache_data(ttl=900) # Cache for 15 minutes
 def fetch_all_ipos():
     """
-    Fetches all IPOs using a secure API key from st.secrets.
-    Filters are applied in Pandas to work around API limitations.
+    Fetches all IPOs using the API key defined at the top of the script.
     """
-    try:
-        api_key = st.secrets["api_credentials"]["api_key"]
-    except (FileNotFoundError, KeyError):
-        st.error("API key not found. Please create a `.streamlit/secrets.toml` file with your key.")
+    if not IPO_ALERTS_API_KEY or IPO_ALERTS_API_KEY == "YOUR_API_KEY_GOES_HERE":
+        st.error("API key is missing. Please edit the app.py file and add your key at the top.")
         return None
     
     API_ENDPOINT = "https://api.ipoalerts.in/ipos"
-    headers = {"Authorization": f"Bearer {api_key}"}
+    headers = {"Authorization": f"Bearer {IPO_ALERTS_API_KEY}"}
     params = {'limit': 500}
     
     try:
@@ -81,7 +87,7 @@ def prepare_model_data(all_ipos_df):
     
     return raw_df, df
 
-# --- Main App Structure ---
+# --- Main App Structure (Organized by Marking Rubric) ---
 st.sidebar.title("Data Analytics Rubric")
 st.sidebar.markdown("Navigate through the project sections.")
 page = st.sidebar.radio("Select Section", 
@@ -94,9 +100,9 @@ page = st.sidebar.radio("Select Section",
      "7. Report & Presentation",
      "Live IPO Tracker"
      ])
-st.sidebar.info(f"Report Date: {pd.Timestamp.now(tz='Asia/Kolkata').strftime('%d %B %Y')}")
+st.sidebar.info(f"Report Date: 29 August 2025")
 
-# Fetch all data once
+# Fetch all data once to be used by all pages
 all_data = fetch_all_ipos()
 
 # ==============================================================================
@@ -106,17 +112,17 @@ if page == "1. Problem Definition & Objectives":
     st.title("1. Problem Definition & Objectives")
     st.header("Project: Predictive Modeling for Indian IPO Performance")
     st.subheader("Problem Definition")
-    st.markdown("Investing in Initial Public Offerings (IPOs) in the Indian market involves significant financial risk due to high volatility. This project aims to mitigate this risk by developing a data-driven model to predict the listing day performance of an IPO, providing potential investors with a quantitative tool to aid their decision-making.")
+    st.markdown("Investing in Initial Public Offerings (IPOs) in the Indian market involves significant financial risk. This project aims to mitigate this risk by developing a data-driven model to predict the listing day performance of an IPO, providing potential investors with a quantitative tool to aid their decision-making.")
     st.subheader("Key Objectives")
-    st.markdown("1.  **Data Collection:** Source a comprehensive dataset of historical and current Indian IPOs programmatically.\n2.  **Data Cleaning:** Process and clean the raw data to prepare it for analysis.\n3.  **Feature Identification:** Perform Exploratory Data Analysis (EDA) to identify key factors influencing IPO performance.\n4.  **Model Development:** Build and train a machine learning model to predict the first-day percentage return.\n5.  **Insight Generation:** Interpret the model's results to provide clear, actionable insights for investors.")
+    st.markdown("1.  **Data Collection:** Source a comprehensive dataset of IPOs programmatically via an API.\n2.  **Data Cleaning:** Process and clean the raw data to prepare it for analysis.\n3.  **Feature Identification:** Perform Exploratory Data Analysis (EDA) to identify key factors influencing IPO performance.\n4.  **Model Development:** Build a machine learning model to predict the first-day percentage return.\n5.  **Insight Generation:** Interpret the model's results to provide clear, actionable insights.")
 
 elif page == "2. Data Collection & Sources":
     st.title("2. Data Collection & Sources")
     st.markdown("""
-    The data for this project is sourced live from the **IPO Alerts API** (`ipoalerts.in`). This provides a structured, reliable stream of historical and current data on Indian IPOs.
+    The data for this project is sourced live from the **IPO Alerts API** (`ipoalerts.in`).
     - **Endpoint:** `https://api.ipoalerts.in/ipos`
-    - **Authentication:** Handled via a Bearer Token (API Key) stored securely in Streamlit's secrets management.
-    - **Strategy:** A single request is made to fetch all available IPOs. The data is then filtered client-side (in Pandas) to overcome limitations of the API's free tier, which does not support server-side filtering by status.
+    - **Authentication:** Handled via a Bearer Token (API Key) defined directly in this script.
+    - **Strategy:** A single request fetches all available IPOs. The data is then filtered client-side (in Pandas) to work around potential API limitations.
     """)
     if all_data is not None:
         st.subheader("Raw Data Preview (First 5 Rows)")
@@ -126,14 +132,11 @@ elif page == "3. Data Cleaning & Preparation":
     st.title("3. Data Cleaning & Preparation")
     raw_historical_data, model_df = prepare_model_data(all_data)
     st.markdown("""
-    The raw data requires several preparation steps before it can be used for analysis and modeling:
-    1.  **Filtering:** The dataset is first filtered to only include IPOs with a `status` of 'closed'.
-    2.  **Type Conversion & Parsing:** Columns like `priceRange` and `issueSize` are parsed to extract numerical values (e.g., '121cr' becomes `121.0`).
-    3.  **Feature Engineering:** New, potentially predictive features are created:
-        - `num_strengths`: The number of strengths listed for the company.
-        - `num_risks`: The number of risks listed.
-        - `FirstDayReturn_percent`: The target variable, calculated from the issue and listing price.
-    4.  **Handling Missing Data:** IPOs with missing essential data (like `issue_price`) are dropped.
+    The raw data requires several preparation steps before modeling:
+    1.  **Filtering:** The dataset is filtered to only include IPOs with a `status` of 'closed'.
+    2.  **Type Conversion & Parsing:** Text columns like `priceRange` and `issueSize` are parsed to extract numerical values.
+    3.  **Feature Engineering:** New features are created, such as `num_strengths`, `num_risks`, and the target variable `FirstDayReturn_percent`.
+    4.  **Handling Missing Data:** IPOs with missing essential data are dropped.
     """)
     if model_df is not None and not model_df.empty:
         st.subheader("Cleaned & Prepared Data for Modeling (First 5 Rows)")
@@ -145,7 +148,7 @@ elif page == "4. Data Exploration & Summarization":
     st.title("4. Data Exploration & Summarization")
     raw_historical_data, model_df = prepare_model_data(all_data)
     if model_df is not None and not model_df.empty:
-        st.markdown("Descriptive statistics provide a high-level overview of the key numerical features in our dataset.")
+        st.markdown("Descriptive statistics provide a high-level overview of the key numerical features.")
         st.write(model_df[['FirstDayReturn_percent', 'issue_size_cr', 'num_strengths', 'num_risks', 'price_band_high']].describe())
     else:
         st.warning("Data for exploration is not available.")
@@ -166,7 +169,7 @@ elif page == "5. Data Visualization":
 
 elif page == "6. Insights & Interpretation":
     st.title("6. Insights & Interpretation through Predictive Modeling")
-    st.markdown("NOTE: The API does not provide the actual `listingPrice` for historical IPOs. For this demonstration, the listing price has been **simulated** to allow the model to be built. The model's accuracy reflects this simulated data.")
+    st.markdown("NOTE: The API does not provide the actual `listingPrice` for historical IPOs. For this demonstration, the listing price has been **simulated** to allow the model to be built.")
     raw_historical_data, model_df = prepare_model_data(all_data)
     if model_df is not None and not model_df.empty:
         features = ['issue_size_cr', 'num_strengths', 'num_risks', 'price_band_high', 'ipo_type']
@@ -176,7 +179,6 @@ elif page == "6. Insights & Interpretation":
             X = df_model[features]
             y = df_model[target]
             
-            # Preprocessing for the model
             categorical_features = ['ipo_type']
             encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
             X_encoded = pd.DataFrame(encoder.fit_transform(X[categorical_features]), columns=encoder.get_feature_names_out(categorical_features))
@@ -206,13 +208,12 @@ elif page == "6. Insights & Interpretation":
 elif page == "7. Report & Presentation":
     st.title("7. Report & Presentation")
     st.markdown("""
-    This Streamlit application serves as the final, interactive report for this data analytics project. It encapsulates the entire workflow as outlined by the marking rubric, from problem definition to actionable insights, in a dynamic and accessible format.
-
+    This Streamlit application serves as the final, interactive report for this data analytics project. It encapsulates the entire workflow as outlined by the marking rubric.
     #### Project Summary
     - **Problem:** The high risk and uncertainty of IPO investing.
-    - **Solution:** A data-driven application that sources live IPO data, analyzes historical trends, and provides a predictive model for first-day returns.
-    - **Methodology:** The project followed a structured data analytics lifecycle: defining the problem, collecting data via API, cleaning and preparing it, exploring and visualizing patterns, and finally, building and interpreting a predictive model.
-    - **Key Insight:** Based on the available data, factors like the IPO's size and its classification (SME vs. Mainboard) were found to be influential. The true predictive power would be unlocked by accessing premium data points like historical subscription numbers and Grey Market Premium (GMP).
+    - **Solution:** A data-driven application that sources live IPO data, analyzes historical trends, and provides a predictive model.
+    - **Methodology:** The project followed a structured data analytics lifecycle: problem definition, data collection, cleaning, exploration, visualization, and finally, modeling and interpretation.
+    - **Key Insight:** Based on available data, factors like IPO size and type (SME vs. Mainboard) are influential. True predictive power would be unlocked by accessing premium data like historical subscription numbers and Grey Market Premium (GMP).
     """)
 
 elif page == "Live IPO Tracker":

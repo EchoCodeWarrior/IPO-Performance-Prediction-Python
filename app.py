@@ -1,5 +1,5 @@
 # ===================================================================
-# IPO Analytics App - Web Scraping Version
+# IPO Analytics App - Robust Web Scraping Version
 # Data Source: chittorgarh.com
 # ===================================================================
 import streamlit as st
@@ -15,11 +15,12 @@ from sklearn.preprocessing import OneHotEncoder
 # --- Page Configuration ---
 st.set_page_config(page_title="IPO Analytics Project", page_icon="📊", layout="wide")
 
-# --- Data Caching and Scraping ---
+# --- Data Caching and Scraping (Robust Version) ---
 @st.cache_data(ttl=3600) # Cache the data for 1 hour
 def fetch_and_clean_ipo_data():
     """
     Scrapes IPO data from chittorgarh.com, cleans it, and prepares it for analysis.
+    This version dynamically finds tables instead of using fixed indices.
     """
     try:
         url = "https://www.chittorgarh.com/ipo/ipo_dashboard.asp"
@@ -29,44 +30,52 @@ def fetch_and_clean_ipo_data():
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         
-        # pandas.read_html() scrapes all tables from the page
         all_tables = pd.read_html(response.text)
         
-        # --- Identify and Combine Historical Data ---
-        # The specific indices of tables can change if the website layout changes.
-        # As of Aug 2025, these indices correspond to past Mainboard and SME IPOs.
-        past_mainboard_df = all_tables[4]
-        past_sme_df = all_tables[5]
-        
-        historical_df = pd.concat([past_mainboard_df, past_sme_df], ignore_index=True)
+        # --- Dynamically find the correct tables ---
+        historical_dfs = []
+        current_df = pd.DataFrame()
+
+        # Loop through all scraped tables to find the ones we need
+        for table in all_tables:
+            # Clean column names for easier checking
+            clean_columns = [str(col).strip() for col in table.columns]
+            table.columns = clean_columns
+
+            # Identify historical tables by looking for unique columns
+            if 'Listing Price' in clean_columns and 'Listing Gain %' in clean_columns:
+                historical_dfs.append(table)
+            
+            # Identify the current IPO table
+            if 'Close Date' in clean_columns and 'QIB' in clean_columns:
+                current_df = table
+
+        if not historical_dfs:
+            st.warning("Could not dynamically find any historical IPO data tables on the page.")
+            return None, None
+            
+        historical_df = pd.concat(historical_dfs, ignore_index=True)
         
         # --- Data Cleaning ---
-        # Rename columns for easier access
         historical_df.columns = ['company_name', 'exchange', 'issue_price', 'current_price', 'listing_price', 
                                  'listing_gain_pct', 'all_time_high', 'all_time_low', '3_month_return', '6_month_return']
         
-        # Function to clean currency and percentage columns
         def clean_numeric_column(series):
-            return pd.to_numeric(series.astype(str).str.replace(r'[₹,Cr]', '', regex=True), errors='coerce')
+            return pd.to_numeric(series.astype(str).str.replace(r'[₹,Cr%]', '', regex=True), errors='coerce')
 
-        # Apply cleaning
         for col in ['issue_price', 'current_price', 'listing_price', 'listing_gain_pct', 'all_time_high', 'all_time_low']:
             historical_df[col] = clean_numeric_column(historical_df[col])
             
-        # Drop rows where essential data for modeling is missing
         historical_df.dropna(subset=['issue_price', 'listing_price', 'listing_gain_pct'], inplace=True)
         
-        # Identify current IPOs for the tracker
-        current_ipos_df = all_tables[0]
-
-        return historical_df, current_ipos_df, all_tables
+        return historical_df, current_df
         
     except requests.exceptions.RequestException as e:
         st.error(f"Failed to fetch data. Network error: {e}")
-        return None, None, None
-    except (IndexError, KeyError) as e:
-        st.error(f"Failed to parse the website's tables. The website layout may have changed. Error: {e}")
-        return None, None, None
+        return None, None
+    except Exception as e:
+        st.error(f"An unexpected error occurred during scraping or cleaning: {e}")
+        return None, None
 
 # --- Main App Structure ---
 st.sidebar.title("Data Analytics Rubric")
@@ -81,10 +90,10 @@ page = st.sidebar.radio("Select Section",
      "7. Report & Presentation",
      "Live IPO Tracker"
      ])
-st.sidebar.info(f"Report Date: {pd.Timestamp.now(tz='Asia/Kolkata').strftime('%d %B %Y')}")
+st.sidebar.info(f"Report Date: 29 August 2025")
 
 # Fetch the data
-model_df, current_df, raw_tables = fetch_and_clean_ipo_data()
+model_df, current_df = fetch_and_clean_ipo_data()
 
 # ==============================================================================
 # RUBRIC SECTIONS AS APP PAGES
@@ -101,21 +110,20 @@ elif page == "2. Data Collection & Sources":
     st.title("2. Data Collection & Sources")
     st.markdown("""
     The data for this project is sourced via **web scraping** from the [Chittorgarh IPO Dashboard](https://www.chittorgarh.com/ipo/ipo_dashboard.asp).
-    - **Methodology:** A Python script using the `requests` library fetches the page's HTML. The `pandas.read_html` function then parses all HTML tables into DataFrames.
-    - **Data Collected:** The script specifically extracts tables corresponding to past Mainboard and SME IPOs to create a historical dataset for modeling.
-    - **Note on Web Scraping:** This method is subject to changes in the website's structure. Ethical considerations, such as not overloading the server with requests, are important.
+    - **Methodology:** A Python script using the `requests` library fetches the page's HTML. The `pandas.read_html` function parses all HTML tables. The script then dynamically identifies the correct tables by searching for key column headers (e.g., 'Listing Price').
+    - **Data Collected:** Tables for past Mainboard and SME IPOs are extracted to create a historical dataset.
     """)
-    if raw_tables:
-        st.subheader("Sample of Raw Scraped Table (Past Mainboard IPOs)")
-        st.dataframe(raw_tables[4].head())
+    if model_df is not None:
+        st.subheader("Sample of Scraped and Combined Historical Data")
+        st.dataframe(model_df.head())
 
 elif page == "3. Data Cleaning & Preparation":
     st.title("3. Data Cleaning & Preparation")
     st.markdown("""
-    The raw scraped data is unstructured and requires significant cleaning:
-    1.  **Table Combination:** DataFrames for past Mainboard and SME IPOs are combined.
+    The raw scraped data requires significant cleaning:
+    1.  **Dynamic Table Finding:** The script intelligently locates the correct data tables on the page, making it resilient to website layout changes.
     2.  **Column Renaming:** Columns are given simple, Python-friendly names (e.g., `listing_gain_pct`).
-    3.  **Data Type Conversion:** Text columns containing currency ('₹', 'Cr') and percentage symbols are cleaned and converted to numeric types.
+    3.  **Data Type Conversion:** Text columns containing currency ('₹', 'Cr') and percentage symbols ('%') are cleaned and converted to numeric types.
     4.  **Handling Missing Values:** Rows missing essential data for the model (like `listing_price`) are removed.
     """)
     if model_df is not None and not model_df.empty:
@@ -142,8 +150,6 @@ elif page == "5. Data Visualization":
 elif page == "6. Insights & Interpretation":
     st.title("6. Insights & Interpretation through Predictive Modeling")
     if model_df is not None and not model_df.empty:
-        # For simplicity, we'll model using available numeric features.
-        # A more advanced model would use subscription data if scraped from individual IPO pages.
         features = ['issue_price']
         target = 'listing_gain_pct'
         
@@ -166,9 +172,9 @@ elif page == "6. Insights & Interpretation":
 
             st.header("Insights & Interpretation")
             st.markdown("""
-            - The model, trained on the issue price, provides a baseline for prediction. However, its accuracy is limited by the lack of richer features.
+            - A baseline model was built using `issue_price` to predict `listing_gain_pct`.
             - **Key Insight:** The `R-squared` value indicates how much of the variance in listing gains is explained by the model. A low value suggests that `issue_price` alone is not a strong predictor.
-            - **To build a more powerful model**, the next step would be to scrape subscription data (QIB, NII, RII) for each IPO, as these are known to be highly influential factors. This scraped dataset provides the perfect foundation for such future work.
+            - **To build a more powerful model**, the next step would be to scrape subscription data (QIB, NII, RII) for each IPO, as these are known to be highly influential factors.
             """)
         else:
              st.warning("Not enough clean data to build a model.")
@@ -177,8 +183,8 @@ elif page == "7. Report & Presentation":
     st.title("7. Report & Presentation")
     st.markdown("""
     This Streamlit application serves as the interactive report for the project.
-    - **Summary:** The project successfully transitioned from a limited API to a rich web scraping data source. A complete dataset of historical IPOs was collected, cleaned, and analyzed. A baseline predictive model was built, and its performance was evaluated.
-    - **Conclusion:** Web scraping proved to be a viable and powerful method for data collection. While the baseline model shows limited predictive power, the project establishes a robust data pipeline and identifies the key next step for model improvement: incorporating subscription data.
+    - **Summary:** The project successfully implemented a robust web scraping pipeline to collect historical IPO data. The data was cleaned, analyzed, and used to build a baseline predictive model.
+    - **Conclusion:** Web scraping is a powerful method for data collection when APIs are limited. The analysis shows that while a simple model can be built, richer features like subscription data (available on individual IPO pages) are necessary to create a highly accurate predictive tool.
     """)
 
 elif page == "Live IPO Tracker":
@@ -188,4 +194,4 @@ elif page == "Live IPO Tracker":
         st.subheader("Current & Upcoming IPOs")
         st.dataframe(current_df)
     else:
-        st.info("No current or upcoming IPO data was found.")
+        st.info("Could not find a table for current or upcoming IPOs on the page.")

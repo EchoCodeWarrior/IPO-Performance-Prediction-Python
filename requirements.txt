@@ -1,7 +1,6 @@
 streamlit
-pyngrok
 pandas
-scikit-learn
+numpy
 plotly
 requests
-
+scikit-learn
